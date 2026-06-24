@@ -1,0 +1,16 @@
+# ===== 敏感信息（最重要：别把 .env 传到 git！）=====
+.env
+
+# ===== IDE 编辑器配置（自动生成，别传）=====
+.idea/
+.vscode/
+
+# ===== Python 缓存/虚拟环境 =====
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# ===== 生成的图片（阶段2之后会有）=====
+data/outputs/
