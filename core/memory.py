@@ -59,10 +59,17 @@ def load_history(path: str = HISTORY_PATH) -> list:
 def save_history(messages: list, path: str = HISTORY_PATH) -> None:
     """
     保存对话历史：去掉第一条「主 system 提示」（它每次由 profile 重新生成），
-    其余全存——包括压缩产生的【摘要 system】、近期对话、成对的 tool 消息。
+    其余全存。多模态消息（含图片）只留文字部分——丢掉图片 base64，避免撑爆历史。
     """
-    # 第一条是主 system 提示，去掉；其余原样存
-    convo = messages[1:] if (messages and messages[0].get("role") == "system") else messages
+    # 第一条是主 system 提示，去掉
+    raw = messages[1:] if (messages and messages[0].get("role") == "system") else messages
+    convo = []
+    for m in raw:
+        c = m.get("content")
+        if isinstance(c, list):  # 多模态 content：只提取文字，丢掉图片
+            texts = [p.get("text", "") for p in c if p.get("type") == "text"]
+            m = {**m, "content": "\n".join(t for t in texts if t)}
+        convo.append(m)
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, "w", encoding="utf-8") as f:
         json.dump(convo, f, ensure_ascii=False, indent=2)

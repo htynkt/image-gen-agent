@@ -1,11 +1,12 @@
 """
-图片生成 Agent · 阶段 5：生产增强（可观测性 - 日志）
+图片生成 Agent · 阶段 6：多模态（支持文字 + 图片一起发给 LLM）
 =============================================
-在阶段3（记忆系统）基础上，加入「日志」：
-  - 每次工具调用、每次错误、每次重试，都记到 data/agent.log
-  - 事后能查「刚才到底发生了什么」（比如 AIGC 为什么失败）
+在阶段5（日志）基础上，agent_loop 支持「文字 + 图片」多模态输入：
+  - 发图片时，转成 base64 按 OpenAI 多模态格式塞进消息，gpt-4o 能看图
+  - 例如：发张照片 + "做成拼豆" → LLM 看图 → 调拼豆工具
 
-（保留：拼豆 + AIGC 工具、对话重试、记忆系统、上下文压缩）
+（保留：拼豆 + AIGC 工具、对话重试、记忆系统、上下文压缩、日志）
+命令行模式（__main__）仍只支持文字；图片输入走 app.py 的 Gradio 界面。
 
 【安全】API Key 通过 .env 读取。
 """
@@ -13,6 +14,7 @@
 import json
 import os
 import time
+import base64
 from openai import OpenAI, APIConnectionError, APITimeoutError
 from dotenv import load_dotenv
 
@@ -23,10 +25,10 @@ from core.memory import (
     load_history, save_history,
     compress_history_if_needed,
 )
-from core.logger import setup_logger  # 阶段5：日志
+from core.logger import setup_logger
 
 load_dotenv()
-log = setup_logger("agent")  # 全局 logger
+log = setup_logger("agent")
 
 
 # ============================================================
@@ -41,7 +43,7 @@ if not API_KEY or not BASE_URL:
     )
 
 client = OpenAI(api_key=API_KEY, base_url=BASE_URL)
-MODEL = "gpt-4o"
+MODEL = "gpt-4o"  # 多模态模型，能看图
 
 
 # 带连接重试的对话调用（每次重试都记日志）
@@ -61,6 +63,15 @@ def chat_with_retry(**kwargs):
     raise last_err
 
 
+def _image_to_data_url(path: str) -> str:
+    """把本地图片读成 data URL（base64），喂给多模态 LLM。"""
+    ext = os.path.splitext(path)[1].lower().lstrip(".") or "png"
+    mime = "jpeg" if ext in ("jpg", "jpeg") else ext
+    with open(path, "rb") as f:
+        b64 = base64.b64encode(f.read()).decode()
+    return f"data:image/{mime};base64,{b64}"
+
+
 # ============================================================
 # 2. 工具注册
 # ============================================================
@@ -75,18 +86,33 @@ TOOL_FUNCTIONS = {
 
 
 # ============================================================
-# 3. Agent Loop（带记忆 + 上下文压缩 + 日志）
+# 3. Agent Loop（支持文字 + 图片多模态）
 # ============================================================
-def agent_loop(user_input: str) -> str:
-    log.info(f"收到输入: {user_input[:60]}")
+def agent_loop(user_text: str, user_image: str = None) -> str:
+    """
+    user_text: 用户输入的文字
+    user_image: 可选，用户上传的图片路径（多模态）
+    """
+    log.info(f"收到输入: text={(user_text or '')[:60]} | image={user_image or '无'}")
     profile = load_profile()
     history = load_history()
     history = compress_history_if_needed(history, client, MODEL)
+
+    # 构建本轮 user 消息：有图就多模态，没图就纯文字
+    if user_image and os.path.exists(user_image):
+        content = []
+        if user_text:
+            content.append({"type": "text", "text": user_text})
+        content.append({"type": "image_url", "image_url": {"url": _image_to_data_url(user_image)}})
+        # 告诉 LLM 图片路径，方便它调用拼豆工具时传 image_path
+        content.append({"type": "text", "text": f"（用户上传的图片文件路径是 {user_image}。若需做成拼豆，把这个路径作为 image_path 传给 generate_bead_art）"})
+        user_msg = {"role": "user", "content": content}
+    else:
+        user_msg = {"role": "user", "content": user_text}
+
     messages = [
         {"role": "system", "content": build_system_prompt(profile)},
-    ] + history + [
-        {"role": "user", "content": user_input},
-    ]
+    ] + history + [user_msg]
 
     reply = ""
     try:
@@ -125,27 +151,27 @@ def agent_loop(user_input: str) -> str:
             reply = resp.choices[0].message.content or "（收尾时未返回内容）"
             print(f"\n🤖 Agent：\n{reply}")
     finally:
-        save_history(messages)
+        save_history(messages)  # 多模态图片会在存储时被清理掉（只留文字）
     return reply
 
 
 # ============================================================
-# 4. 跑起来（连续对话模式）
+# 4. 命令行模式（纯文字；要发图片请用 app.py 的网页界面）
 # ============================================================
-if __name__ == "__main__":                       # 只有「直接运行 agent.py」时才执行下面这段；被别的文件 import 时跳过
-    print("=" * 50)                              # 打印一行分隔线（50 个等号拼成）
-    print("图片生成 Agent · 阶段5（记忆 + 重试 + 日志）")  # 启动横幅
-    print("输入 quit 退出。关掉重开，Agent 还记得你们聊过什么～")           # 告诉用户怎么退出
-    print("=" * 50)                              # 再打一行分隔线，把横幅包起来
-    while True:                                  # 无限循环：一直等你说话，直到你说 quit 或按 Ctrl+C
+if __name__ == "__main__":
+    print("=" * 50)
+    print("图片生成 Agent · 命令行模式（纯文字）。要发图片请运行：python app.py")
+    print("输入 quit 退出。关掉重开，Agent 还记得你们聊过什么～")
+    print("=" * 50)
+    while True:
         try:
-            user_input = input("\n你：").strip()  # 阻塞等待输入（提示符是「你：」），strip 去掉首尾空白
-        except (EOFError, KeyboardInterrupt):    # 捕获两种「打断」：EOFError=输入流结束，KeyboardInterrupt=你按了 Ctrl+C
-            print("\n再见～")                     # 打印告别语
-            break                                # 跳出 while 循环 → 程序结束
-        if user_input.lower() in ("quit", "exit", "q"):  # 统一转小写判断是不是退出命令（quit/exit/q，大小写都认）
-            print("再见～下次见！")               # 打印告别语
-            break                                # 跳出循环 → 正常退出
-        if not user_input:                       # 如果输入是空的（只敲了回车）
-            continue                             # 跳过本轮，重新等输入（不拿空话去打扰 Agent）
-        agent_loop(user_input)                   # 把这句话交给 agent_loop：Agent 思考 → 调工具 → 回复 → 顺便存进记忆
+            user_input = input("\n你：").strip()
+        except (EOFError, KeyboardInterrupt):
+            print("\n再见～")
+            break
+        if user_input.lower() in ("quit", "exit", "q"):
+            print("再见～下次见！")
+            break
+        if not user_input:
+            continue
+        agent_loop(user_input)

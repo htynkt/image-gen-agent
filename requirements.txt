@@ -1,0 +1,13 @@
+# ===== 原有依赖（保留）=====
+openai
+python-dotenv
+pyyaml
+numpy
+pillow
+scikit-image
+requests
+
+# ===== 新增：Web 后端（阶段6）=====
+fastapi
+uvicorn[standard]
+python-multipart
