@@ -85,6 +85,15 @@ TOOL_FUNCTIONS = {
 }
 
 
+# 引用历史的关键词：用户说这些词时，才把过往对话加载进上下文
+_HISTORY_KEYWORDS = ("上次", "上一次", "之前", "刚才", "刚刚", "上一个", "上一张", "前一次", "记得吗", "历史")
+
+
+def _mentions_history(text: str) -> bool:
+    """用户是否在引用之前的对话（如「上次那个」「之前那张图」）"""
+    return any(k in (text or "") for k in _HISTORY_KEYWORDS)
+
+
 # ============================================================
 # 3. Agent Loop（支持文字 + 图片多模态）
 # ============================================================
@@ -95,8 +104,13 @@ def agent_loop(user_text: str, user_image: str = None) -> str:
     """
     log.info(f"收到输入: text={(user_text or '')[:60]} | image={user_image or '无'}")
     profile = load_profile()
-    history = load_history()
-    history = compress_history_if_needed(history, client, MODEL)
+    # 记忆策略：默认不把历史塞进上下文（避免回复混乱，AI 只聚焦当前这句话）；
+    # 只有用户【引用了之前】（说"上次/之前/刚才..."）时，才加载历史，让 AI 能看懂"上次那个"
+    if _mentions_history(user_text):
+        history = compress_history_if_needed(load_history(), client, MODEL)
+        log.info("检测到引用历史，已加载过往对话供参考")
+    else:
+        history = []
 
     # 构建本轮 user 消息：有图就多模态，没图就纯文字
     if user_image and os.path.exists(user_image):
