@@ -1,11 +1,11 @@
 """
-图片生成 Agent · 阶段 3：记忆系统
+图片生成 Agent · 阶段 5：生产增强（可观测性 - 日志）
 =============================================
-步骤1：个性化档案 profile（称呼/语气/风格注入 system 提示词）
-步骤2：对话持久化（存/加载历史，重启还记得聊过什么）
-步骤3：上下文压缩（历史太长时自动总结成摘要，省 context、防撑爆）
+在阶段3（记忆系统）基础上，加入「日志」：
+  - 每次工具调用、每次错误、每次重试，都记到 data/agent.log
+  - 事后能查「刚才到底发生了什么」（比如 AIGC 为什么失败）
 
-（保留阶段2：拼豆图 + AIGC 两个工具，对话连接重试）
+（保留：拼豆 + AIGC 工具、对话重试、记忆系统、上下文压缩）
 
 【安全】API Key 通过 .env 读取。
 """
@@ -19,12 +19,14 @@ from dotenv import load_dotenv
 from skills.bead_art import generate_bead_art, BEAD_TOOL
 from skills.aigc_creative import generate_aigc, AIGC_TOOL
 from core.memory import (
-    load_profile, build_system_prompt,      # 步骤1
-    load_history, save_history,             # 步骤2
-    compress_history_if_needed,             # 步骤3：上下文压缩
+    load_profile, build_system_prompt,
+    load_history, save_history,
+    compress_history_if_needed,
 )
+from core.logger import setup_logger  # 阶段5：日志
 
 load_dotenv()
+log = setup_logger("agent")  # 全局 logger
 
 
 # ============================================================
@@ -39,21 +41,23 @@ if not API_KEY or not BASE_URL:
     )
 
 client = OpenAI(api_key=API_KEY, base_url=BASE_URL)
-MODEL = "gpt-4o"  # 对话模型，要和 BASE_URL 匹配
+MODEL = "gpt-4o"
 
 
-# 带连接重试的对话调用：网络不稳时自动重连
+# 带连接重试的对话调用（每次重试都记日志）
 def chat_with_retry(**kwargs):
     last_err = None
-    for attempt in range(1, 5):  # 最多重试 4 次
+    for attempt in range(1, 5):
         try:
             return client.chat.completions.create(**kwargs)
         except (APIConnectionError, APITimeoutError) as e:
             last_err = e
+            log.warning(f"对话连接失败 第{attempt}/4次: {type(e).__name__}")
             if attempt < 4:
                 wait = attempt * 3
                 print(f"   ⚠️ 网络连接失败（{type(e).__name__}），{wait}s 后第 {attempt + 1} 次重试...")
                 time.sleep(wait)
+    log.error(f"对话连接 4 次全失败: {type(last_err).__name__}: {last_err}")
     raise last_err
 
 
@@ -61,8 +65,8 @@ def chat_with_retry(**kwargs):
 # 2. 工具注册
 # ============================================================
 TOOLS = [
-    BEAD_TOOL,     # 拼豆图工具
-    AIGC_TOOL,     # AIGC 创意图工具
+    BEAD_TOOL,
+    AIGC_TOOL,
 ]
 TOOL_FUNCTIONS = {
     "generate_bead_art": generate_bead_art,
@@ -71,16 +75,13 @@ TOOL_FUNCTIONS = {
 
 
 # ============================================================
-# 3. Agent Loop（带记忆 + 上下文压缩）
+# 3. Agent Loop（带记忆 + 上下文压缩 + 日志）
 # ============================================================
 def agent_loop(user_input: str) -> str:
-    # 步骤1：读个性化档案 → system 提示词
+    log.info(f"收到输入: {user_input[:60]}")
     profile = load_profile()
-    # 步骤2：加载历史对话
     history = load_history()
-    # 步骤3：历史太长时，自动压缩成摘要（省 context；平台不稳压缩失败也不丢数据）
     history = compress_history_if_needed(history, client, MODEL)
-    # 拼成完整 messages：system +（压缩后的）历史 + 新输入
     messages = [
         {"role": "system", "content": build_system_prompt(profile)},
     ] + history + [
@@ -105,9 +106,11 @@ def agent_loop(user_input: str) -> str:
                     try:
                         args = json.loads(call.function.arguments)
                         result = TOOL_FUNCTIONS[name](**args)
+                        log.info(f"工具 {name} 成功 | 参数: {args}")
                     except Exception as e:
                         result = f"[工具执行出错] {type(e).__name__}: {e}"
                         print(f"   ⚠️ [工具报错] {name} → {type(e).__name__}: {e}")
+                        log.error(f"工具 {name} 失败 | {type(e).__name__}: {e}")
                     messages.append(
                         {"role": "tool", "tool_call_id": call.id, "content": result}
                     )
@@ -122,7 +125,6 @@ def agent_loop(user_input: str) -> str:
             reply = resp.choices[0].message.content or "（收尾时未返回内容）"
             print(f"\n🤖 Agent：\n{reply}")
     finally:
-        # 步骤2：无论正常结束还是出错，都把本轮对话存下来（下次就记得了）
         save_history(messages)
     return reply
 
@@ -132,7 +134,7 @@ def agent_loop(user_input: str) -> str:
 # ============================================================
 if __name__ == "__main__":                       # 只有「直接运行 agent.py」时才执行下面这段；被别的文件 import 时跳过
     print("=" * 50)                              # 打印一行分隔线（50 个等号拼成）
-    print("图片生成 Agent · 阶段3（个性化档案 + 对话记忆 + 上下文压缩）")  # 启动横幅
+    print("图片生成 Agent · 阶段5（记忆 + 重试 + 日志）")  # 启动横幅
     print("输入 quit 退出。关掉重开，Agent 还记得你们聊过什么～")           # 告诉用户怎么退出
     print("=" * 50)                              # 再打一行分隔线，把横幅包起来
     while True:                                  # 无限循环：一直等你说话，直到你说 quit 或按 Ctrl+C

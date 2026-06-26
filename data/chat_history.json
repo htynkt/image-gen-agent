@@ -1,217 +1,7 @@
 [
   {
-    "role": "user",
-    "content": "记得我喜欢知性风格，不论是人物还是图片"
-  },
-  {
-    "role": "user",
-    "content": "我想让你帮我生成一个咖啡厅，从进门处看进去，左边是大落地窗，右前方是咖啡前台，落地窗旁边有两张桌椅，正好是下午，有橘黄的阳光照进来"
-  },
-  {
-    "content": null,
-    "refusal": null,
-    "role": "assistant",
-    "annotations": [],
-    "audio": null,
-    "function_call": null,
-    "tool_calls": [
-      {
-        "id": "call_ooJ1yH67BNfjrWKNzpkezMSC",
-        "function": {
-          "arguments": "{\"prompt\":\"从咖啡厅的进门处看进去，左边是大落地窗，阳光从窗外洒进来，右前方是咖啡前台，落地窗旁边有两张桌椅，一幅安静舒适的下午场景，橘黄色调营造温暖知性的氛围\",\"style\":\"知性风\"}",
-          "name": "generate_aigc"
-        },
-        "type": "function"
-      }
-    ]
-  },
-  {
-    "role": "tool",
-    "tool_call_id": "call_ooJ1yH67BNfjrWKNzpkezMSC",
-    "content": "[工具执行出错] APIConnectionError: Connection error."
-  },
-  {
-    "role": "user",
-    "content": "继续上面的内容"
-  },
-  {
-    "content": null,
-    "refusal": null,
-    "role": "assistant",
-    "annotations": null,
-    "audio": null,
-    "function_call": null,
-    "tool_calls": [
-      {
-        "id": "call_5gMO4EkEia6dHnM7MQF3yixd",
-        "function": {
-          "arguments": "{\"prompt\":\"从咖啡厅的进门处看进去，左边是大落地窗，阳光从窗外洒进来，右前方是咖啡前台，落地窗旁边有两张桌椅，一幅安静舒适的下午场景，橘黄色调营造温暖知性的氛围\",\"style\":\"知性风\"}",
-          "name": "generate_aigc",
-          "parameters": null
-        },
-        "type": "function"
-      }
-    ]
-  },
-  {
-    "role": "tool",
-    "tool_call_id": "call_5gMO4EkEia6dHnM7MQF3yixd",
-    "content": "[工具执行出错] APIConnectionError: Connection error."
-  },
-  {
-    "role": "user",
-    "content": "继续上面的"
-  },
-  {
-    "content": "哎呀茜茜，似乎网络小小出了点问题呢，不过别着急，我再试试让咖啡厅的阳光与温暖来到你的世界~",
-    "refusal": null,
-    "role": "assistant",
-    "annotations": null,
-    "audio": null,
-    "function_call": null,
-    "tool_calls": [
-      {
-        "id": "call_LOX8Nv1i7NjPjReUDN3Z7LDR",
-        "function": {
-          "arguments": "{\"prompt\":\"从咖啡厅的进门处看进去，左边是大落地窗，阳光从窗外洒进来，右前方是咖啡前台，落地窗旁边有两张桌椅，一幅安静舒适的下午场景，橘黄色调营造温暖知性的氛围\",\"style\":\"知性风\"}",
-          "name": "generate_aigc",
-          "parameters": null
-        },
-        "type": "function"
-      }
-    ]
-  },
-  {
-    "role": "tool",
-    "tool_call_id": "call_LOX8Nv1i7NjPjReUDN3Z7LDR",
-    "content": "[工具执行出错] RateLimitError: Error code: 429 - {'error': {'message': '当前分组上游负载已饱和，请稍后再试 (request id: 2026062503513749902908496e93ae39l0rjGPO)', 'type': 'upstream_error', 'param': '', 'code': 'model_not_found'}}"
-  },
-  {
-    "role": "user",
-    "content": "继续"
-  },
-  {
-    "content": "啊，茜茜，可能系统还没恢复正常呢，但是别担心，我一定能帮你解决！稍等片刻，我再试一试！",
-    "refusal": null,
-    "role": "assistant",
-    "annotations": [],
-    "audio": null,
-    "function_call": null,
-    "tool_calls": [
-      {
-        "id": "call_iU4CsOMcRvHKibfT0Chw8WWp",
-        "function": {
-          "arguments": "{\"prompt\":\"从咖啡厅的进门处看进去，左边是大落地窗，阳光从窗外洒进来，右前方是咖啡前台，落地窗旁边有两张桌椅，一幅安静舒适的下午场景，橘黄色调营造温暖知性的氛围\",\"style\":\"知性风\"}",
-          "name": "generate_aigc"
-        },
-        "type": "function"
-      }
-    ]
-  },
-  {
-    "role": "tool",
-    "tool_call_id": "call_iU4CsOMcRvHKibfT0Chw8WWp",
-    "content": "[工具执行出错] APIConnectionError: Connection error."
-  },
-  {
-    "role": "user",
-    "content": "继续"
-  },
-  {
-    "content": "好耶，茜茜，我会继续努力尝试直到成功为止！请再给我一点时间哦！(*>◡<*)",
-    "refusal": null,
-    "role": "assistant",
-    "annotations": null,
-    "audio": null,
-    "function_call": null,
-    "tool_calls": [
-      {
-        "id": "call_PnGa0yHUEM8mRUUmr7LZzlko",
-        "function": {
-          "arguments": "{\"prompt\":\"从咖啡厅的进门处看进去，左边是大落地窗，阳光从窗外洒进来，右前方是咖啡前台，落地窗旁边有两张桌椅，一幅安静舒适的下午场景，橘黄色调营造温暖知性的氛围\",\"style\":\"知性风\"}",
-          "name": "generate_aigc",
-          "parameters": null
-        },
-        "type": "function"
-      }
-    ]
-  },
-  {
-    "role": "tool",
-    "tool_call_id": "call_PnGa0yHUEM8mRUUmr7LZzlko",
-    "content": "[工具执行出错] APIConnectionError: Connection error."
-  },
-  {
-    "role": "user",
-    "content": "我平时用什么风格"
-  },
-  {
-    "role": "user",
-    "content": "我喜欢什么风格"
-  },
-  {
-    "role": "user",
-    "content": "继续"
-  },
-  {
-    "content": "茜茜，我记得你喜欢的风格是偏知性且温暖的，对吧？无论人物还是图片，你最爱这种气质满满的感觉～让我再试一次，为你构建那个阳光满溢的咖啡厅！☕✨",
-    "refusal": null,
-    "role": "assistant",
-    "annotations": null,
-    "audio": null,
-    "function_call": null,
-    "tool_calls": [
-      {
-        "id": "call_0JHKMMtZUXxvexaqStaPMuQB",
-        "function": {
-          "arguments": "{\"prompt\":\"从咖啡厅的进门处看进去，左边是大落地窗，阳光从窗外洒进来，右前方是咖啡前台，落地窗旁边有两张桌椅，一幅安静舒适的下午场景，橘黄色调营造温暖知性的氛围\",\"style\":\"知性风\"}",
-          "name": "generate_aigc",
-          "parameters": null
-        },
-        "type": "function"
-      }
-    ]
-  },
-  {
-    "role": "tool",
-    "tool_call_id": "call_0JHKMMtZUXxvexaqStaPMuQB",
-    "content": "[工具执行出错] InternalServerError: Error code: 502 - {'error': {'message': 'Service temporarily unavailable', 'type': 'service_error'}}"
-  },
-  {
-    "role": "user",
-    "content": "继续"
-  },
-  {
-    "role": "user",
-    "content": "继续"
-  },
-  {
-    "content": "茜茜，我一直在为你努力生成呢，可惜服务暂时有些不给力。不过别担心，我会继续尝试，一定把那个温暖又知性的咖啡厅送到你的面前！☕🌞",
-    "refusal": null,
-    "role": "assistant",
-    "annotations": null,
-    "audio": null,
-    "function_call": null,
-    "tool_calls": [
-      {
-        "id": "call_C6JMb6lX3ygZW5xbnAwxl0PY",
-        "function": {
-          "arguments": "{\"prompt\":\"从咖啡厅的进门处看进去，左边是大落地窗，阳光从窗外洒进来，右前方是咖啡前台，落地窗旁边有两张桌椅，一幅安静舒适的下午场景，橘黄色调营造温暖知性的氛围\",\"style\":\"知性风\"}",
-          "name": "generate_aigc",
-          "parameters": null
-        },
-        "type": "function"
-      }
-    ]
-  },
-  {
-    "role": "tool",
-    "tool_call_id": "call_C6JMb6lX3ygZW5xbnAwxl0PY",
-    "content": "[工具执行出错] InternalServerError: Error code: 502 - {'error': {'message': 'Service temporarily unavailable', 'type': 'service_error'}}"
-  },
-  {
-    "role": "user",
-    "content": "继续"
+    "role": "system",
+    "content": "【过往对话摘要】\n用户自称茜茜，明确表达自己喜欢知性风格的人物和图片，并要求生成一个以咖啡厅为主题的知性风场景：从进门处看进去，左边是大落地窗，有橘黄色阳光洒进，右前方是咖啡前台，窗旁两张桌椅，营造出温馨安静的氛围。助手多次尝试生成图片，但因服务问题未能成功。"
   },
   {
     "content": "茜茜，真抱歉服务还是不给力，我已经抱紧代码努力尝试了（＞人＜）；你稍等一下，我一定帮你把那个橘黄阳光洒下的咖啡厅呈现出来！🌟",
@@ -291,5 +81,33 @@
     "role": "tool",
     "tool_call_id": "call_elmIdN7yJ8Dz9gxXEC3g7LfH",
     "content": "AIGC 创意图已生成：D:\\LWQ\\系统学习过程\\大模型-agent开发\\first_agent\\data\\outputs\\aigc_从咖啡厅的进门处看进去左.png\n提示语：从咖啡厅的进门处看进去，左边是大落地窗，阳光从窗外洒进来，右前方是咖啡前台，落地窗旁边有两张桌椅，一幅安静舒适的下午场景，橘黄色调营造温暖知性的氛围，知性风\n模型：gpt-4o-image，尺寸：1024x1024"
+  },
+  {
+    "role": "user",
+    "content": "继续生成图片，“data/outputs/aigc_从咖啡厅的进门处看进去左.png”把这张图中靠近门的两张椅子上坐着两个女生"
+  },
+  {
+    "content": null,
+    "refusal": null,
+    "role": "assistant",
+    "annotations": null,
+    "audio": null,
+    "function_call": null,
+    "tool_calls": [
+      {
+        "id": "call_4z8cToOexZEwfb1MNYOhuuYA",
+        "function": {
+          "arguments": "{\"prompt\":\"在咖啡厅的门旁有两张椅子，两个女生正坐在椅子上，阳光洒在她们身上。环境是温暖的橘黄色调，知性的风格\",\"style\":\"知性风\"}",
+          "name": "generate_aigc",
+          "parameters": null
+        },
+        "type": "function"
+      }
+    ]
+  },
+  {
+    "role": "tool",
+    "tool_call_id": "call_4z8cToOexZEwfb1MNYOhuuYA",
+    "content": "AIGC 创意图已生成：D:\\LWQ\\系统学习过程\\大模型-agent开发\\first_agent\\data\\outputs\\aigc_在咖啡厅的门旁有两张椅子.png\n提示语：在咖啡厅的门旁有两张椅子，两个女生正坐在椅子上，阳光洒在她们身上。环境是温暖的橘黄色调，知性的风格，知性风\n模型：gpt-4o-image，尺寸：1024x1024"
   }
 ]

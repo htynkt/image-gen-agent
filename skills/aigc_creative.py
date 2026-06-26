@@ -20,13 +20,15 @@ from openai import (
     RateLimitError,
 )
 from dotenv import load_dotenv
+from core.logger import setup_logger  # 阶段5：日志
 
 load_dotenv()
+log = setup_logger("aigc")
 
 # 复用 .env 的 API 配置（和 agent.py 一致）
 API_KEY = os.getenv("API_KEY")
 BASE_URL = os.getenv("BASE_URL")
-# 文生图模型名：按你的服务填（OpenAI→dall-e-3 / gpt-image-1；智谱→cogview-3-plus；聚合平台按模型列表填）
+# 文生图模型名：按你的服务填（聚合平台按模型列表填）
 IMAGE_MODEL = "gpt-4o-image"
 IMAGE_SIZE = "1024x1024"
 
@@ -47,15 +49,18 @@ def _generate_with_retry(**kwargs):
     文生图调用带重试：遇到 502（服务临时不可用）/ 429（限流）/ 网络抖动时，
     自动等几秒重连，最多 3 次。提高在平台偶发抽风时的出图成功率。
     3 次都失败才抛出（交给外层 try-except 优雅处理，不会让 Agent 崩）。
+    每次重试/失败都记日志，事后能在 data/agent.log 查到。
     """
     for attempt in range(1, 4):  # 最多 3 次
         try:
             return client.images.generate(**kwargs)
         except (InternalServerError, RateLimitError, APIConnectionError, APITimeoutError) as e:
             if attempt == 3:
+                log.error(f"文生图 3 次重试全失败: {type(e).__name__}: {e}")
                 raise  # 第 3 次仍失败 → 抛出，由外层兜底
             wait = attempt * 5  # 5s、10s 递增
             print(f"   ⚠️ 文生图服务异常（{type(e).__name__}），{wait}s 后第 {attempt + 1} 次重试...")
+            log.warning(f"文生图异常 第{attempt}/3次: {type(e).__name__}（{wait}s 后重试）")
             time.sleep(wait)
 
 
@@ -71,6 +76,7 @@ def generate_aigc(prompt: str, style: str = "") -> str:
 
     full_prompt = f"{prompt}，{style}" if style else prompt
     print(f"   🔧 [工具执行] generate_aigc(prompt='{prompt}', style='{style}')")
+    log.info(f"调用文生图 | model={IMAGE_MODEL} | prompt={full_prompt[:60]}")
 
     # 1. 调用文生图接口（带重试，扛住平台偶发 502/429）
     resp = _generate_with_retry(
@@ -95,6 +101,7 @@ def generate_aigc(prompt: str, style: str = "") -> str:
         with open(out_path, "wb") as f:
             f.write(r.content)
 
+    log.info(f"文生图成功: {out_path}")
     return (
         f"AIGC 创意图已生成：{out_path}\n"
         f"提示语：{full_prompt}\n"
