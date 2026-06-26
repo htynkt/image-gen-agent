@@ -1,0 +1,118 @@
+"""
+记忆系统（阶段3）
+================
+步骤1：个性化档案 profile（称呼/语气/风格）
+步骤2：对话持久化（存/加载历史）
+步骤3：上下文压缩（历史太长时，自动总结成摘要，省 context、防撑爆）
+"""
+import os
+import json
+import yaml
+
+HISTORY_PATH = "data/chat_history.json"
+SUMMARY_THRESHOLD = 4000   # 历史总字符超过这个 → 触发压缩（可调，越小压得越勤）
+KEEP_RECENT = 8            # 压缩时保留最近几条原文（可调）
+
+
+# ============ 步骤1：个性化档案 ============
+def load_profile(path: str = "config/profile.yaml") -> dict:
+    """读取个性化档案。文件不存在则返回空字典（用默认值）。"""
+    if not os.path.exists(path):
+        return {}
+    with open(path, "r", encoding="utf-8") as f:
+        return yaml.safe_load(f) or {}
+
+
+def build_system_prompt(profile: dict) -> str:
+    """根据个性化档案，拼出 Agent 的 system 提示词。"""
+    nickname = profile.get("nickname", "你")
+    tone = profile.get("tone", "友好")
+    style = profile.get("style") or {}
+    style_str = "；".join(f"{k}：{v}" for k, v in style.items()) if style else "无特别偏好"
+
+    return (
+        f"你是「{nickname}」的专属图片生成助手，称呼 ta 为「{nickname}」。\n"
+        f"说话语气：{tone}。\n"
+        f"出图默认风格偏好：{style_str}。\n\n"
+        f"你有两个工具：\n"
+        f"1. generate_bead_art：把【已有的图片】转成拼豆图纸（用户说'拼豆/做成拼豆'，"
+        f"或给了图片路径时调用，必须传 image_path）。\n"
+        f"2. generate_aigc：根据【一段提示语】生成全新的创意图（用户描述画面/风格，"
+        f"想让 AI 画一张图时调用，必须传 prompt）。\n"
+        f"判断依据：用户给的是'已有图片'→拼豆；用户给的是'文字描述/想画一张'→AIGC。"
+        f"工具返回后，用你的语气告诉用户图片已生成、保存在哪里。"
+    )
+
+
+# ============ 步骤2：对话持久化 ============
+def load_history(path: str = HISTORY_PATH) -> list:
+    """加载历史对话消息。文件不存在/损坏则返回空列表。"""
+    if not os.path.exists(path):
+        return []
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except (json.JSONDecodeError, OSError):
+        return []
+
+
+def save_history(messages: list, path: str = HISTORY_PATH) -> None:
+    """
+    保存对话历史：去掉第一条「主 system 提示」（它每次由 profile 重新生成），
+    其余全存——包括压缩产生的【摘要 system】、近期对话、成对的 tool 消息。
+    """
+    # 第一条是主 system 提示，去掉；其余原样存
+    convo = messages[1:] if (messages and messages[0].get("role") == "system") else messages
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(convo, f, ensure_ascii=False, indent=2)
+
+
+# ============ 步骤3：上下文压缩 ============
+def _msg_text(m: dict) -> str:
+    """估算一条消息占多少字符（content + tool_calls 都算上）"""
+    text = m.get("content") or ""
+    if m.get("tool_calls"):
+        text += json.dumps(m["tool_calls"], ensure_ascii=False)
+    return text
+
+
+def _summarize(messages: list, client, model: str) -> str:
+    """让 LLM 把一段历史对话总结成简短摘要。"""
+    text = "\n".join(f"[{m.get('role')}] {_msg_text(m)}" for m in messages)
+    resp = client.chat.completions.create(
+        model=model,
+        messages=[
+            {"role": "system", "content":
+             "你是对话总结助手。把下面的历史对话压缩成简短摘要，"
+             "保留关键信息：用户是谁、明确说过的偏好、请求过什么图、重要结论。"
+             "用三五句话讲清楚，不要编造没有的内容。"},
+            {"role": "user", "content": text},
+        ],
+    )
+    return resp.choices[0].message.content
+
+
+def compress_history_if_needed(history: list, client, model: str,
+                               threshold: int = SUMMARY_THRESHOLD,
+                               keep_recent: int = KEEP_RECENT) -> list:
+    """
+    历史太长时压缩：把较早的消息交给 LLM 总结成一条【摘要】，
+    替换掉那一大堆旧消息，只保留最近 keep_recent 条原文。
+    - 不够长 → 原样返回（不压缩）
+    - 压缩失败（如网络/平台不稳）→ 原样返回（绝不丢数据）
+    """
+    total_chars = sum(len(_msg_text(m)) for m in history)
+    if total_chars <= threshold or len(history) <= keep_recent:
+        return history  # 还不够长，不用压缩
+
+    older = history[:-keep_recent]   # 较早的：要被总结掉
+    recent = history[-keep_recent:]  # 最近的：保留原文
+    print(f"   🗜️ 历史较长（约 {total_chars} 字符），把较早的 {len(older)} 条压缩成摘要...")
+    try:
+        summary = _summarize(older, client, model)
+    except Exception as e:
+        print(f"   ⚠️ 压缩失败（{type(e).__name__}），本次保留原文，不丢数据")
+        return history
+    print(f"   ✅ 已压缩为摘要（{len(summary)} 字符），保留最近 {len(recent)} 条原文")
+    return [{"role": "system", "content": f"【过往对话摘要】\n{summary}"}] + recent

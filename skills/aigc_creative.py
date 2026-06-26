@@ -9,9 +9,16 @@
 """
 import os
 import re
+import time
 import base64
 import requests
-from openai import OpenAI
+from openai import (
+    OpenAI,
+    APIConnectionError,
+    APITimeoutError,
+    InternalServerError,
+    RateLimitError,
+)
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -19,9 +26,9 @@ load_dotenv()
 # 复用 .env 的 API 配置（和 agent.py 一致）
 API_KEY = os.getenv("API_KEY")
 BASE_URL = os.getenv("BASE_URL")
-# 文生图模型名：按你的服务填（OpenAI→dall-e-3 / gpt-image-1；智谱→cogview-3-plus）
-IMAGE_MODEL = "gpt-image-1"
-IMAGE_SIZE ="1024x1024"
+# 文生图模型名：按你的服务填（OpenAI→dall-e-3 / gpt-image-1；智谱→cogview-3-plus；聚合平台按模型列表填）
+IMAGE_MODEL = "gpt-4o-image"
+IMAGE_SIZE = "1024x1024"
 
 if API_KEY and BASE_URL:
     client = OpenAI(api_key=API_KEY, base_url=BASE_URL)
@@ -33,6 +40,23 @@ def _safe_name(text: str, n: int = 12) -> str:
     """从提示语里提取安全文件名片段（保留中文/字母数字）"""
     s = re.sub(r"[^\w一-龥]", "", text)[:n]
     return s or "img"
+
+
+def _generate_with_retry(**kwargs):
+    """
+    文生图调用带重试：遇到 502（服务临时不可用）/ 429（限流）/ 网络抖动时，
+    自动等几秒重连，最多 3 次。提高在平台偶发抽风时的出图成功率。
+    3 次都失败才抛出（交给外层 try-except 优雅处理，不会让 Agent 崩）。
+    """
+    for attempt in range(1, 4):  # 最多 3 次
+        try:
+            return client.images.generate(**kwargs)
+        except (InternalServerError, RateLimitError, APIConnectionError, APITimeoutError) as e:
+            if attempt == 3:
+                raise  # 第 3 次仍失败 → 抛出，由外层兜底
+            wait = attempt * 5  # 5s、10s 递增
+            print(f"   ⚠️ 文生图服务异常（{type(e).__name__}），{wait}s 后第 {attempt + 1} 次重试...")
+            time.sleep(wait)
 
 
 def generate_aigc(prompt: str, style: str = "") -> str:
@@ -48,8 +72,8 @@ def generate_aigc(prompt: str, style: str = "") -> str:
     full_prompt = f"{prompt}，{style}" if style else prompt
     print(f"   🔧 [工具执行] generate_aigc(prompt='{prompt}', style='{style}')")
 
-    # 1. 调用文生图接口（OpenAI 兼容的 images.generate）
-    resp = client.images.generate(
+    # 1. 调用文生图接口（带重试，扛住平台偶发 502/429）
+    resp = _generate_with_retry(
         model=IMAGE_MODEL,
         prompt=full_prompt,
         n=1,
