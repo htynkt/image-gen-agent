@@ -7,20 +7,24 @@
   - 输入是卡通/插画/动漫时，本地算法零成本即可，无需 AI
 
 输入：图片路径（+ 可选 size，不传则自动）
-输出：图纸存到 data/outputs/bead_pattern.png，返回材料清单文字
+输出：图纸存到 data/outputs/bead_pattern_<输入图名>.png，返回材料清单文字
 """
-import os
-import numpy as np
-from PIL import Image, ImageDraw, ImageFont
-from skimage import color as skcolor
+import os                              # 路径操作、创建目录
+import numpy as np                     # 数组运算（向量化配色，快）
+from PIL import Image, ImageDraw, ImageFont  # 画图（Pillow 库）
+from skimage import color as skcolor   # 颜色空间转换（RGB ↔ Lab）
 
 
 def _hex2rgb(h):
-    h = h.lstrip("#")
+    """把 "#FFD100" 这样的十六进制颜色转成 (R, G, B) 元组。"""
+    h = h.lstrip("#")  # 去掉开头的 #
+    # 每 2 位一组，按 16 进制转成整数：i=0→R, i=2→G, i=4→B
     return tuple(int(h[i:i + 2], 16) for i in (0, 2, 4))
 
 
-# ---------- Artkal-S 5mm 官方色卡（159 色）：色号 + 名称 + HEX ----------
+# ---------- Artkal-S 5mm 官方色卡（159 色）----------
+# 每一项格式：(色号, 颜色名, HEX)。这是真实可买的拼豆颜色。
+# 下面 S01~S159 共 159 行，格式统一，不逐行注释；重点是它们都是「真实色号」。
 BEAD_PALETTE = [
     ("S01", "White", "#FFFFFF"), ("S02", "Burning Sand", "#FFA38B"),
     ("S03", "Tangerine", "#F6AD4C"), ("S04", "Orange", "#FF671F"),
@@ -103,10 +107,12 @@ BEAD_PALETTE = [
     ("S157", "Iron Grey", "#3E4955"), ("S158", "Pepper", "#202830"),
     ("S159", "Oslo Gray", "#888B8D"),
 ]
-# 预计算：色板 RGB（用于填色）+ Lab（用于配色匹配）
+
+# 预计算：把色板的 HEX 转成 RGB（画图填色用）
 _PALETTE = [(c, n, _hex2rgb(h)) for c, n, h in BEAD_PALETTE]
+# 再把 RGB 转成 Lab 颜色空间，存成 numpy 数组（配色匹配用——Lab 距离更接近人眼感受）
 _PALETTE_LAB = np.array([skcolor.rgb2lab(np.array(rgb, dtype=float) / 255.0)
-                         for _, _, rgb in _PALETTE])  # (159, 3)
+                         for _, _, rgb in _PALETTE])  # 形状 (159, 3)
 
 
 def _quantize(arr: np.ndarray) -> np.ndarray:
@@ -114,36 +120,37 @@ def _quantize(arr: np.ndarray) -> np.ndarray:
     向量化配色：把 (h, w, 3) 的图，每个像素映射到最接近的色板【索引】。
     用 numpy 一次性算完，159 色也不会慢。
     """
-    lab = skcolor.rgb2lab(arr.astype(float) / 255.0)        # (h, w, 3)
-    flat = lab.reshape(-1, 3)                                # (M, 3)
-    # 每个像素到每个色板的 Lab 距离：(M, 159)
+    lab = skcolor.rgb2lab(arr.astype(float) / 255.0)        # 整图 RGB→Lab，形状 (h, w, 3)
+    flat = lab.reshape(-1, 3)                                # 摊平成 (像素数, 3)，方便批量计算
+    # 广播：算每个像素 到 每个色板 的 Lab 距离平方，形状 (像素数, 159)
     dists = np.sum((flat[:, None, :] - _PALETTE_LAB[None, :, :]) ** 2, axis=2)
-    return np.argmin(dists, axis=1).reshape(lab.shape[:2])   # (h, w) 索引
+    # 每个像素取距离最小的那个色板【索引】，再还原成 (h, w) 形状
+    return np.argmin(dists, axis=1).reshape(lab.shape[:2])
 
 
 def _auto_size(img: Image.Image) -> int:
-    """根据图片颜色复杂度自动选「长边豆数」（24~48）"""
-    small = np.array(img.resize((64, 64)).convert("RGB"))
-    quantized = (small // 32) * 32
-    n_colors = len({tuple(p) for p in quantized.reshape(-1, 3)})
-    if n_colors <= 8:
-        return 24
+    """根据图片颜色复杂度自动选「长边豆数」（24~48）：颜色少→小图，颜色多→大图。"""
+    small = np.array(img.resize((64, 64)).convert("RGB"))    # 缩成 64×64 来估算（转数组）
+    quantized = (small // 32) * 32                            # 每通道粗量化到 8 级（先 //32 再 *32）
+    n_colors = len({tuple(p) for p in quantized.reshape(-1, 3)})  # 数独立颜色数（集合去重）
+    if n_colors <= 8:        # 颜色很少（简单图）
+        return 24            # 用小豆板
     if n_colors <= 16:
         return 32
     if n_colors <= 28:
         return 40
-    return 48
+    return 48                # 颜色很多（细节多）→ 用大豆板
 
 
 def _font(size: int):
-    """加载系统中文字体（微软雅黑/黑体），失败用默认"""
-    for p in ("C:/Windows/Fonts/msyh.ttc", "C:/Windows/Fonts/simhei.ttf"):
-        if os.path.exists(p):
+    """加载系统中文字体（微软雅黑/黑体），加载失败就用 PIL 默认字体。"""
+    for p in ("C:/Windows/Fonts/msyh.ttc", "C:/Windows/Fonts/simhei.ttf"):  # 候选字体路径
+        if os.path.exists(p):              # 字体文件存在
             try:
-                return ImageFont.truetype(p, size)
-            except Exception:
-                pass
-    return ImageFont.load_default()
+                return ImageFont.truetype(p, size)  # 加载指定字号的字体
+            except Exception:                       # 加载失败
+                pass                                # 继续试下一个候选
+    return ImageFont.load_default()        # 都没有就用 PIL 自带的默认字体
 
 
 def generate_bead_art(image_path: str, size=None) -> str:
@@ -154,63 +161,65 @@ def generate_bead_art(image_path: str, size=None) -> str:
     返回：材料清单文字（图纸存到 data/outputs/bead_pattern_<输入图名>.png）
     """
     # 1. 打开图片，确定豆板尺寸（长边=size或自动，短边按比例不拉伸）
-    img = Image.open(image_path).convert("RGB")
-    w0, h0 = img.size
-    long_side = size if size else _auto_size(img)
-    if w0 >= h0:
-        bw, bh = long_side, max(1, round(long_side * h0 / w0))
-    else:
-        bw, bh = max(1, round(long_side * w0 / h0)), long_side
+    img = Image.open(image_path).convert("RGB")  # 打开并转成 RGB（去掉透明通道）
+    w0, h0 = img.size                             # 原图的宽、高
+    long_side = size if size else _auto_size(img) # 长边豆数（指定就用指定，否则自动）
+    if w0 >= h0:                                  # 横图（宽 ≥ 高）
+        bw, bh = long_side, max(1, round(long_side * h0 / w0))  # 宽=长边，高按比例缩
+    else:                                         # 竖图
+        bw, bh = max(1, round(long_side * w0 / h0)), long_side  # 高=长边，宽按比例缩
 
-    # 2. 缩放到豆板 + 向量化配色
-    arr = np.array(img.resize((bw, bh)))
-    idx = _quantize(arr)  # (bh, bw) 每格的色板索引
+    # 2. 缩放到豆板尺寸 + 向量化配色
+    arr = np.array(img.resize((bw, bh)))  # 缩成 bw×bh（之后每像素 = 1 颗豆），转成数组
+    idx = _quantize(arr)                   # 每个格子匹配到色板索引，形状 (bh, bw)
 
-    # 3. 统计用量
-    counts = {}
-    for i in idx.reshape(-1):
-        counts[int(i)] = counts.get(int(i), 0) + 1
-    total = bw * bh
-    n_colors = len(counts)
-    items = sorted(counts.items(), key=lambda kv: -kv[1])
+    # 3. 统计每种颜色的用量
+    counts = {}                                   # 色板索引 → 数量
+    for i in idx.reshape(-1):                     # 遍历所有格子的索引
+        counts[int(i)] = counts.get(int(i), 0) + 1  # 计数
+    total = bw * bh                               # 总豆数
+    n_colors = len(counts)                        # 用了几种颜色
+    items = sorted(counts.items(), key=lambda kv: -kv[1])  # 按用量从多到少排序
 
     # 4. 画图纸：浅灰底 + 正方形色块 + 中间色号 + 红网格
-    bead_px = 32  # 每格 32px，够写色号
-    margin = 70
-    pat = Image.new("RGB", (bw * bead_px, bh * bead_px + margin * 2), (244, 244, 244))
-    d = ImageDraw.Draw(pat)
-    oy = margin
-    f_cell = _font(10)   # 格内色号字体
-    for y in range(bh):
-        for x in range(bw):
-            code, name, rgb = _PALETTE[int(idx[y, x])]
-            # 正方形色块
+    bead_px = 32  # 每格在图里的像素大小（32px，够写下色号）
+    margin = 70   # 上下留白（用来放标题和材料清单）
+    pat = Image.new("RGB", (bw * bead_px, bh * bead_px + margin * 2), (244, 244, 244))  # 建浅灰底画布
+    d = ImageDraw.Draw(pat)  # 拿到画笔
+    oy = margin              # 豆图区域的起始 y（顶部留 margin 给标题）
+    f_cell = _font(10)       # 格内色号的字体（10 号）
+    for y in range(bh):                    # 逐行
+        for x in range(bw):                # 逐列
+            code, name, rgb = _PALETTE[int(idx[y, x])]  # 这一格对应的 色号/名称/RGB
+            # 画一个正方形色块
             d.rectangle([x * bead_px, oy + y * bead_px,
                          (x + 1) * bead_px, oy + (y + 1) * bead_px], fill=rgb)
-            # 中间写色号（按背景亮度选黑字/白字，保证可读）
-            lum = 0.299 * rgb[0] + 0.587 * rgb[1] + 0.114 * rgb[2]
-            tc = (0, 0, 0) if lum > 140 else (255, 255, 255)
+            # 算这个颜色的亮度，决定色号用黑字还是白字（保证在底色上看得清）
+            lum = 0.299 * rgb[0] + 0.587 * rgb[1] + 0.114 * rgb[2]  # 亮度（加权公式）
+            tc = (0, 0, 0) if lum > 140 else (255, 255, 255)        # 亮色块用黑字，暗色块用白字
+            # 在格子正中间写色号（anchor="mm" = 中中对齐，即正中心）
             d.text((x * bead_px + bead_px // 2, oy + y * bead_px + bead_px // 2),
                    code, fill=tc, font=f_cell, anchor="mm")
-    # 红色网格线（画在色块之上，分隔每格）
-    for x in range(bw + 1):
+    # 红色网格线（画在色块之上，把每格分隔开）
+    for x in range(bw + 1):  # 竖线（共 bw+1 条）
         d.line([x * bead_px, oy, x * bead_px, oy + bh * bead_px], fill=(210, 80, 80))
-    for y in range(bh + 1):
+    for y in range(bh + 1):  # 横线（共 bh+1 条）
         d.line([0, oy + y * bead_px, bw * bead_px, oy + y * bead_px], fill=(210, 80, 80))
-    # 顶部标题 + 底部材料清单（前 14 色，完整清单在返回文字里）
+    # 顶部标题：尺寸 / 色数 / 总数
     d.text((12, 16), f"{bw}×{bh}  /  {n_colors} 色  /  共 {total} 颗",
            fill=(40, 40, 40), font=_font(35))
+    # 底部材料清单（只列前 14 色，完整清单在返回的文字里）
     txt = "  ".join(f"{_PALETTE[i][0]}×{c}" for i, c in items[:14])
     d.text((12, oy + bh * bead_px + 18), "材料：" + txt, fill=(40, 40, 40), font=_font(35))
 
     # 5. 保存（文件名带上输入图名，避免多张图互相覆盖）
-    os.makedirs("data/outputs", exist_ok=True)
-    stem = os.path.splitext(os.path.basename(image_path))[0]  # 如 "3.jpg" → "3"
-    out_path = os.path.abspath(f"data/outputs/bead_pattern_{stem}.png")
-    pat.save(out_path)
+    os.makedirs("data/outputs", exist_ok=True)  # 确保 outputs 目录存在
+    stem = os.path.splitext(os.path.basename(image_path))[0]  # 取输入图名（去扩展名），如 "3.jpg"→"3"
+    out_path = os.path.abspath(f"data/outputs/bead_pattern_{stem}.png")  # 拼出输出绝对路径
+    pat.save(out_path)  # 保存图纸
 
-    # 6. 返回材料清单（给 LLM）
-    material = "\n".join(f"  · {_PALETTE[i][0]} {_PALETTE[i][1]}：{c} 颗" for i, c in items)
+    # 6. 返回材料清单文字（给 LLM，它会转述给用户）
+    material = "\n".join(f"  · {_PALETTE[i][0]} {_PALETTE[i][1]}：{c} 颗" for i, c in items)  # 完整清单
     print(f"   🔧 [工具执行] generate_bead_art('{image_path}') → 自动尺寸 {bw}×{bh}")
     return (
         f"拼豆图纸已生成：{out_path}\n"
@@ -219,35 +228,35 @@ def generate_bead_art(image_path: str, size=None) -> str:
     )
 
 
-# ---------- 工具说明书（给 LLM 看）----------
+# ---------- 工具说明书（给 LLM 看，决定何时调用、怎么传参）----------
 BEAD_TOOL = {
-    "type": "function",
+    "type": "function",       # 工具类型：函数
     "function": {
-        "name": "generate_bead_art",
-        "description": (
+        "name": "generate_bead_art",  # 工具名（LLM 用这个名字调用）
+        "description": (                # 告诉 LLM 这个工具干什么、什么时候用
             "把一张本地图片转成拼豆图纸：自动判断尺寸，每个格子是正方形并标注 Artkal 色号，"
             "带红色网格和材料清单（参考 a.jpg 风格）。用户想把图片做成拼豆图纸时调用。"
         ),
-        "parameters": {
+        "parameters": {                 # 参数定义（JSON schema 格式）
             "type": "object",
             "properties": {
-                "image_path": {
+                "image_path": {         # 必填参数：图片路径
                     "type": "string",
                     "description": "要转换的图片路径，例如 data/3.jpg",
                 },
-                "size": {
+                "size": {               # 可选参数：长边豆数
                     "type": "integer",
                     "description": "长边豆数；不传则根据图片复杂度自动判断（24~48）",
                 },
             },
-            "required": ["image_path"],
+            "required": ["image_path"],  # 只有 image_path 是必填
         },
     },
 }
 
 
 # ---------- 直接运行：对真实图片生成拼豆图纸 ----------
-if __name__ == "__main__":
-    IMAGE = "data/3.jpg"  # 改成你自己的图片路径
+if __name__ == "__main__":                # 只有直接运行本文件时才执行
+    IMAGE = "data/3.jpg"                   # 要转换的图片（改成你自己的）
     print(f"开始把 {IMAGE} 转成拼豆图纸（自动尺寸）...\n")
-    print(generate_bead_art(IMAGE))
+    print(generate_bead_art(IMAGE))        # 调用并打印结果
