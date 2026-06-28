@@ -65,26 +65,57 @@ API_KEY=你的key
 BASE_URL=https://你的接口地址
 ```
 > 需要一个 OpenAI 兼容的服务（同时支持 gpt-4o 对话 + 文生图）。
+> ⚠️ `.env` 已在 `.gitignore` 中，不会上传到 git，可放心填自己的密钥。
 
-### 2. 启动后端（终端 1，在项目根目录）
+### 2. 安装依赖
 
 ```bash
 pip install -r requirements.txt
+```
+
+然后**二选一**即可👇
+
+---
+
+### 方式一：命令行直接跑（最快 · 纯文字对话）
+
+在**项目根目录**执行：
+```bash
+python agent.py
+```
+直接在终端和 Agent 文字聊天，输 `quit` 退出。
+
+- ✅ 最轻量，一行命令验证 Agent 核心（工具调用 / 记忆 / 重试）能否跑通
+- ⚠️ 只支持文字；AIGC 生成的图会保存到 `data/outputs/`（自己去目录看）
+- ⚠️ **上传图片 / 拼豆 / 看图** 需用下面的网页版
+
+### 方式二：前后端分离（完整体验 · 支持图片）
+
+**终端 1 · 后端**（项目根目录）：
+```bash
 uvicorn backend.main:app --reload --port 8000
 ```
 验证：打开 http://localhost:8000/api/health → 看到 `{"status":"ok"}` 即成功。
 
-### 3. 启动前端（终端 2）
-
+**终端 2 · 前端**：
 ```bash
 cd frontend
 npm install
 npm run dev
 ```
 
-### 4. 打开界面
+**打开界面**：浏览器访问 **http://localhost:5173** 🎉
+（可发文字+图片，生成的图能点击放大、一键下载）
 
-浏览器访问 **http://localhost:5173** 🎉
+---
+
+### 📲 接入微信公众号（可选 · 进阶，普通使用可忽略）
+
+`backend/wechat.py` 是把本 Agent 接入微信公众号的适配层（复用 `agent_loop`，零侵入）。
+
+> 💡 **不想接微信的话，直接忽略这部分即可**，上面的「方式一 / 方式二」已能满足全部日常使用。
+
+若要接入：个人订阅号无客服消息接口（生图体验受限，目前主要支持文字）；且微信已于 **2025 年底**把「开发接口管理」从公众平台迁移到了**微信开发者平台**（`developers.weixin.qq.com/platform/`），需配合内网穿透，在新平台配置服务器地址（`/wechat`）。详见 `backend/wechat.py` 内注释。
 
 ---
 
