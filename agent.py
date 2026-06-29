@@ -195,6 +195,40 @@ def agent_loop(user_text: str, user_image: str = None, user_id: str = "default")
 
 
 # ============================================================
+# 3.5 轻量单轮对话（公众号对话框专用：不走 Agent Loop，不生图，快且省 token）
+# ============================================================
+def chat_once(user_text: str, user_id: str = "default") -> str:
+    """
+    轻量单轮对话（公众号对话框用）：不走 Agent Loop、不带工具、不生图。
+    适合：聊天 / 问答咨询 / 写文案 / 构思·优化「生图提示词」/ 技巧解答。
+    特点：快、省 token、5 秒内稳。生图等重活由菜单引导去网页版。
+    """
+    # 配额限流（和 agent_loop 共用同一套，统一计数）
+    allowed, used, limit = check_and_consume(user_id)
+    if not allowed:
+        print(f"   🚫 [{user_id}] 轻量对话额度已满，拦截")
+        return f"今日免费体验额度（{limit} 次）已用完，明天再来吧～"
+
+    system = (
+        "你是「画灵屋」公众号的助手画灵，语气友好、简洁。\n"
+        "你的能力：① 陪聊、问答咨询；② 写文案；③ 帮用户构思/优化「生图提示词」，"
+        "让 ta 能生成更好的图；④ 解答 PS/修图/设计等技巧问题。\n"
+        "【重要】你【不能】直接生成图片或拼豆图。若用户想「生成图片 / 拼豆 / 出图 / 画一张图」，"
+        "请引导：「请点击公众号底部菜单【创作】入口，在网页版生成，体验更好、可直接下载 🎨」。\n"
+        "回复控制在三五句话内，不啰嗦。"
+    )
+    messages = [
+        {"role": "system", "content": system},
+        {"role": "user", "content": user_text},
+    ]
+    # 单次直调便宜模型（不带 tools，不进 Agent Loop）→ 快、省、5 秒内稳
+    resp = chat_with_retry(model=CHEAP_MODEL, messages=messages)
+    reply = resp.choices[0].message.content or "（没听清，再说一次试试？）"
+    print(f"   💬 轻量对话 [{user_id}]：{user_text[:20]} → {reply[:30]}…")
+    return reply
+
+
+# ============================================================
 # 4. 命令行模式（纯文字；要发图片请用网页界面 backend + frontend）
 # ============================================================
 if __name__ == "__main__":                       # 只有「直接运行 agent.py」时才执行下面；被 import 时跳过

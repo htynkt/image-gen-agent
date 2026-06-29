@@ -15,7 +15,7 @@ import xml.etree.ElementTree as ET   # 解析/构造 XML
 from fastapi import APIRouter, Request, HTTPException, Response
 from fastapi.concurrency import run_in_threadpool   # 把同步阻塞调用丢进线程池，避免卡住事件循环
 
-from agent import agent_loop         # 复用 Agent 核心（和 backend/main.py 同理，零侵入）
+from agent import agent_loop, chat_once   # agent_loop：生图等重活（网页版）；chat_once：公众号对话框轻量对话
 
 WECHAT_TOKEN = "huiling2026"         # ← 改成你自己的 Token（公众号后台填的必须和这里【完全一致】）
 
@@ -57,6 +57,18 @@ def _text_reply(to_user: str, from_user: str, content: str) -> str:
     )
 
 
+# 明确的「生成图片/拼豆」意图关键词（命中 → 引导去菜单，零 token，不调模型）
+_GENERATE_KEYWORDS = (
+    "生成图片", "生成一张", "生成图", "画一张", "画一个图", "画个图", "画一张图",
+    "帮我画", "出图", "出一张", "拼豆", "做拼豆", "生成拼豆", "aigc图", "画图",
+)
+
+
+def _is_generate_intent(text: str) -> bool:
+    """用户是否明确想【生成/产出一张图】（而非写描述/咨询）。命中则引导去菜单。"""
+    return any(k in text for k in _GENERATE_KEYWORDS)
+
+
 @router.post("/wechat")
 async def wechat_message(request: Request):
     """POST：用户发来的消息/事件。解析 → 调 agent_loop → 回 XML。"""
@@ -64,22 +76,28 @@ async def wechat_message(request: Request):
     from_user = msg.get("FromUserName", "")  # 用户 openid（多用户隔离 + 配额的 key）
     to_user = msg.get("ToUserName", "")      # 公众号
 
-    # —— 关注事件：被关注自动回复欢迎语 ——
+    # —— 关注事件：被关注自动回复欢迎语（一进来就告诉用户能做什么）——
     if msg.get("MsgType") == "event" and msg.get("Event") == "subscribe":
-        welcome = ("欢迎来到画灵屋～🐾\n"
-                   "我是画灵，能把一句话变成图：\n"
-                   "  • 直接发文字，我给你画 AIGC 创意图\n"
-                   "  • （图片输入/拼豆即将支持）\n"
+        welcome = ("欢迎来到画灵屋～🐾 我是画灵，你可以：\n"
+                   "💬 和我聊天 / 提问\n"
+                   "✍️ 让我帮你写文案、构思画面、优化「生图提示词」\n"
+                   "📱 问 PS / 修图 / 设计技巧\n"
+                   "🎨 想生成图片 / 拼豆图 → 点底部菜单【创作】入口\n"
                    "今日有免费体验额度，先发句话试试吧～")
         return Response(content=_text_reply(from_user, to_user, welcome), media_type="application/xml")
 
-    # —— 文本消息：交给 agent（带 openid 做多用户隔离 + 配额限流）——
+    # —— 非文本（图片/语音等）：暂不支持，引导去网页版 ——
     if msg.get("MsgType") != "text":
-        return Response(content=_text_reply(from_user, to_user, "暂时只支持文字哦～后续会支持图片 🐾"),
-                        media_type="application/xml")
+        tip = "暂时只在对话框支持文字哦～\n发图/生图请点底部菜单【创作】入口 🎨"
+        return Response(content=_text_reply(from_user, to_user, tip), media_type="application/xml")
 
     user_text = msg.get("Content", "") or ""
-    # agent_loop 同步阻塞 → 丢线程池；user_id=openid 实现多用户隔离 + 配额限流
-    reply = await run_in_threadpool(agent_loop, user_text, None, from_user)
+    # ② 关键词导航：明确的「生成图片/拼豆」意图 → 固定话术引导去菜单（零 token，不调模型）
+    if _is_generate_intent(user_text):
+        guide = ("好的～生成图片 / 拼豆请点底部菜单【创作】入口哦 🎨\n"
+                 "网页版体验更好、可直接下载～")
+        return Response(content=_text_reply(from_user, to_user, guide), media_type="application/xml")
+    # ③ 其他文字需求（聊天/问答/写描述/文案/咨询）→ 轻量单轮对话
+    reply = await run_in_threadpool(chat_once, user_text, from_user)
 
     return Response(content=_text_reply(from_user, to_user, reply), media_type="application/xml")
