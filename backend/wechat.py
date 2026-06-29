@@ -59,19 +59,27 @@ def _text_reply(to_user: str, from_user: str, content: str) -> str:
 
 @router.post("/wechat")
 async def wechat_message(request: Request):
-    """POST：用户发来的消息。解析 → 调 agent_loop → 回 XML。"""
+    """POST：用户发来的消息/事件。解析 → 调 agent_loop → 回 XML。"""
     msg = _parse_msg(await request.body())   # 读 body 并解析 XML
+    from_user = msg.get("FromUserName", "")  # 用户 openid（多用户隔离 + 配额的 key）
+    to_user = msg.get("ToUserName", "")      # 公众号
 
-    # 阶段1：只处理文本；图片/语音等到阶段3、4再支持
+    # —— 关注事件：被关注自动回复欢迎语 ——
+    if msg.get("MsgType") == "event" and msg.get("Event") == "subscribe":
+        welcome = ("欢迎来到画灵屋～🐾\n"
+                   "我是画灵，能把一句话变成图：\n"
+                   "  • 直接发文字，我给你画 AIGC 创意图\n"
+                   "  • （图片输入/拼豆即将支持）\n"
+                   "今日有免费体验额度，先发句话试试吧～")
+        return Response(content=_text_reply(from_user, to_user, welcome), media_type="application/xml")
+
+    # —— 文本消息：交给 agent（带 openid 做多用户隔离 + 配额限流）——
     if msg.get("MsgType") != "text":
-        xml = _text_reply(msg["FromUserName"], msg["ToUserName"],
-                          "暂时只支持文字哦～后续会支持图片 🐾")
-        return Response(content=xml, media_type="application/xml")
+        return Response(content=_text_reply(from_user, to_user, "暂时只支持文字哦～后续会支持图片 🐾"),
+                        media_type="application/xml")
 
     user_text = msg.get("Content", "") or ""
-    # agent_loop 是同步阻塞函数 → 丢进线程池跑，避免卡住 FastAPI 的事件循环（别的请求还能响应）
-    reply = await run_in_threadpool(agent_loop, user_text)
+    # agent_loop 同步阻塞 → 丢线程池；user_id=openid 实现多用户隔离 + 配额限流
+    reply = await run_in_threadpool(agent_loop, user_text, None, from_user)
 
-    # 回复：To/From 对调（ToUserName=用户 openid，FromUserName=公众号）
-    xml = _text_reply(msg["FromUserName"], msg["ToUserName"], reply)
-    return Response(content=xml, media_type="application/xml")
+    return Response(content=_text_reply(from_user, to_user, reply), media_type="application/xml")

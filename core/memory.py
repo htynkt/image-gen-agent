@@ -9,7 +9,7 @@ import os     # 判断文件是否存在、创建目录
 import json   # 读写对话历史（JSON 文件）
 import yaml   # 读 profile.yaml（个性化档案）
 
-HISTORY_PATH = "data/chat_history.json"  # 对话历史的存放路径
+HISTORY_DIR = "data/history"  # 多用户：每个用户一个历史文件 data/history/{user_id}.json
 SUMMARY_THRESHOLD = 4000   # 历史总字符数超过这个 → 触发压缩（可调，越小压得越勤）
 KEEP_RECENT = 8            # 压缩时保留最近几条原文（可调）
 
@@ -46,22 +46,29 @@ def build_system_prompt(profile: dict) -> str:
 
 
 # ============ 步骤2：对话持久化 ============
-def load_history(path: str = HISTORY_PATH) -> list:
-    """加载历史对话消息。文件不存在/损坏则返回空列表。"""
-    if not os.path.exists(path):  # 历史文件不存在
-        return []                  # 没有历史，返回空列表
+def _history_path(user_id: str) -> str:
+    """根据 user_id 拼出该用户的历史文件路径（data/history/{user_id}.json）。"""
+    return os.path.join(HISTORY_DIR, f"{user_id}.json")
+
+
+def load_history(user_id: str) -> list:
+    """加载【该用户】的历史对话。文件不存在/损坏则返回空列表。"""
+    path = _history_path(user_id)        # 算出该用户的历史文件路径
+    if not os.path.exists(path):         # 历史文件不存在
+        return []                         # 没有历史，返回空列表
     try:
         with open(path, "r", encoding="utf-8") as f:  # 读 JSON 文件
             return json.load(f)                        # 解析成消息列表返回
     except (json.JSONDecodeError, OSError):  # 文件损坏或读不了
-        return []                            # 当作没历史，返回空（不让程序崩）
+        return []                             # 当作没历史，返回空（不让程序崩）
 
 
-def save_history(messages: list, path: str = HISTORY_PATH) -> None:
+def save_history(messages: list, user_id: str) -> None:
     """
-    保存对话历史：去掉第一条「主 system 提示」（它每次由 profile 重新生成），
+    保存【该用户】的对话历史：去掉第一条「主 system 提示」（它每次由 profile 重新生成），
     其余全存。多模态消息（含图片）只留文字部分——丢掉图片 base64，避免撑爆历史。
     """
+    path = _history_path(user_id)        # 算出该用户的历史文件路径
     # 第一条是主 system 提示，去掉（它每次重新生成，存了会过时）；其余保留
     raw = messages[1:] if (messages and messages[0].get("role") == "system") else messages
     convo = []                       # 用来存清理后的消息列表

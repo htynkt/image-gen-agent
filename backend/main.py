@@ -97,7 +97,7 @@ def chat(req: ChatRequest):
 
     # 2. 复用 agent_loop（不改它内部）
     try:
-        reply = agent_loop(req.text, user_image=image_path)  # 调用 Agent 核心，拿到文字回复
+        reply = agent_loop(req.text, user_image=image_path, user_id="web")  # 网页版：固定 user_id="web"
     except Exception as e:                                    # Agent 执行出错
         raise HTTPException(500, f"agent 执行失败: {e}")       # 返回 500，不让前端看到堆栈
 

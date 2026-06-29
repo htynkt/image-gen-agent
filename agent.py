@@ -27,6 +27,7 @@ from core.memory import (                                        # 记忆系统
     compress_history_if_needed,                                  #   —— 上下文压缩
 )
 from core.logger import setup_logger   # 日志
+from core.quota import check_and_consume   # 配额限流（商业化·第二步）
 
 load_dotenv()                  # 把 .env 里的 API_KEY / BASE_URL 加载进环境变量
 log = setup_logger("agent")    # 创建一个写文件的日志器（名字 "agent"，写到 data/agent.log）
@@ -107,20 +108,26 @@ def _mentions_history(text: str) -> bool:
 # ============================================================
 # 3. Agent Loop（核心：一个 while 循环，支持文字 + 图片多模态）
 # ============================================================
-def agent_loop(user_text: str, user_image: str = None) -> str:
+def agent_loop(user_text: str, user_image: str = None, user_id: str = "default") -> str:
     """
     user_text:  用户输入的文字
     user_image: 可选，用户上传的图片在本地的路径（多模态）
+    user_id:    用户标识（公众号=openid，网页版="web"）；用于隔离历史 + 配额限流
     返回: LLM 的最终文字回复
     """
-    log.info(f"收到输入: text={(user_text or '')[:60]} | image={user_image or '无'}")  # 记日志（文字截断 60 字符）
+    log.info(f"收到输入: user={user_id} text={(user_text or '')[:60]} | image={user_image or '无'}")
+    # —— 配额限流（入口拦截，超额不调模型，省 token）——
+    allowed, used, limit = check_and_consume(user_id)
+    if not allowed:
+        print(f"   🚫 [{user_id}] 今日额度已满（{limit} 次），拦截，不调模型")
+        return f"今日免费体验额度（{limit} 次）已用完，明天再来吧～"
     profile = load_profile()  # 读个性化档案（称呼/语气/风格）
 
     # —— 记忆策略 ——
     # 默认不把历史塞进上下文（避免回复混乱，AI 只聚焦当前这句话）；
     # 只有用户【引用了之前】（说"上次/之前/刚才..."）时，才加载历史，让 AI 能看懂"上次那个"
     if _mentions_history(user_text):                                            # 用户引用了历史
-        history = compress_history_if_needed(load_history(), client, MODEL)    # 加载历史，必要时压缩
+        history = compress_history_if_needed(load_history(user_id), client, MODEL)    # 加载【该用户】历史，必要时压缩
         log.info("检测到引用历史，已加载过往对话供参考")
     else:                                                                       # 平时对话
         history = []                                                            # 不加载历史，回复保持干净
@@ -183,7 +190,7 @@ def agent_loop(user_text: str, user_image: str = None) -> str:
             reply = resp.choices[0].message.content or "（收尾时未返回内容）"
             print(f"\n🤖 Agent：\n{reply}")
     finally:
-        save_history(messages)  # 无论正常结束还是出错，都把本轮对话存下来（图片在存储时会被清理）
+        save_history(messages, user_id)  # 按 user_id 存（多用户隔离）；图片在存储时会被清理
     return reply                # 返回最终回复文字
 
 
