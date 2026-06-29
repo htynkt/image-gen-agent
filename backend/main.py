@@ -1,7 +1,11 @@
 """
-阶段6：FastAPI 后端
-==================
-把 agent_loop 包一层 HTTP，供前端 Vue 调用。
+FastAPI 后端服务
+================
+承载两件事：
+  1. 公众号 webhook（/wechat，见 wechat.py）—— 对话框导航 + 轻量对话
+  2. 预留小程序后端入口（/api/chat）—— 复用 agent_loop，供小程序调用生图/拼豆
+（原 Vue3 网页版 frontend 已废弃，生图改走小程序。）
+
 核心思想：通过 sys.path + os.chdir 复用根目录的 agent_loop，**不改它内部一行**。
 
 启动（必须在【项目根目录】执行，保证 data/ 相对路径写对位置）：

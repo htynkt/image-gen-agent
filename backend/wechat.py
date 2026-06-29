@@ -95,7 +95,7 @@ async def wechat_message(request: Request):
     # ② 关键词导航：明确的「生成图片/拼豆」意图 → 固定话术引导去菜单（零 token，不调模型）
     if _is_generate_intent(user_text):
         guide = ("好的～生成图片 / 拼豆请点底部菜单【创作】入口哦 🎨\n"
-                 "网页版体验更好、可直接下载～")
+                 "小程序里体验更好、可直接保存到相册～")
         return Response(content=_text_reply(from_user, to_user, guide), media_type="application/xml")
     # ③ 其他文字需求（聊天/问答/写描述/文案/咨询）→ 轻量单轮对话
     reply = await run_in_threadpool(chat_once, user_text, from_user)
