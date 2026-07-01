@@ -1,0 +1,23 @@
+<view class="mine">
+  <!-- 用户信息卡：头像 + 昵称（点头像选微信头像，点昵称填微信昵称，合规授权）-->
+  <view class="profile-card">
+    <button class="avatar-pick" open-type="chooseAvatar" bindchooseavatar="chooseAvatar">
+      <image wx:if="{{avatarUrl}}" class="avatar-img" src="{{avatarUrl}}" />
+      <view wx:else class="avatar-placeholder">🧑</view>
+    </button>
+    <view class="profile-info">
+      <input class="nickname-input" type="nickname" placeholder="点此填昵称"
+             value="{{nickname}}" bindinput="onNickname" />
+      <view class="oid">ID：{{openid}}</view>
+      <view class="save-profile" bindtap="saveProfile">保存</view>
+    </view>
+  </view>
+
+  <!-- 我的收藏 -->
+  <view class="section-title">❤️ 我的收藏（{{favorites.length}}）</view>
+  <view class="grid">
+    <image wx:for="{{favorites}}" wx:key="id" class="grid-img" src="{{item.url}}"
+           mode="aspectFill" data-url="{{item.url}}" bindtap="tapImage" />
+  </view>
+  <view wx:if="{{!favorites.length}}" class="empty">还没有收藏～去主页发现喜欢的图吧 🐾</view>
+</view>

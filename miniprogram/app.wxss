@@ -1,0 +1,16 @@
+/* ===== 画灵屋 全局样式 + 主题色（紫·艺术感，衬图片）===== */
+page {
+  background: #f5f6f8;
+  font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+  color: #1a1a2e;
+  font-size: 28rpx;
+}
+view { box-sizing: border-box; }
+
+/* 主题色 */
+.brand { color: #7c5cff; }
+.bg-brand { background: #7c5cff; }
+.brand-grad { background: linear-gradient(135deg, #a78bfa, #7c5cff); }
+
+/* 卡片通用 */
+.card-surface { background: #fff; border-radius: 20rpx; box-shadow: 0 4rpx 16rpx rgba(60,40,120,0.06); }

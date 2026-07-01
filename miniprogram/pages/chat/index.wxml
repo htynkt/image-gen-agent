@@ -1,0 +1,40 @@
+<view class="chat">
+  <!-- 消息列表 -->
+  <scroll-view class="messages" scroll-y>
+    <view wx:for="{{messages}}" wx:key="index" class="msg {{item.role}}">
+      <!-- 头像：AI=🤖，用户=微信头像（未设则🧑）-->
+      <view class="avatar {{item.role === 'agent' ? 'ai' : 'me'}}">
+        <image wx:if="{{item.role === 'user' && userAvatar}}" class="avatar-img" src="{{userAvatar}}" />
+        <text wx:else class="avatar-emoji">{{item.role === 'agent' ? '🤖' : '🧑'}}</text>
+      </view>
+      <!-- 气泡 -->
+      <view class="bubble">
+        <view wx:if="{{item.loading}}" class="text loading-text">思考中… 🤔</view>
+        <block wx:else>
+          <view class="text">{{item.text}}</view>
+          <view class="images">
+            <view wx:for="{{item.images}}" wx:for-item="img" wx:key="*this" class="img-wrap">
+              <image class="msg-img" src="{{img}}" mode="aspectFill"
+                     data-url="{{img}}" data-urls="{{item.images}}" bindtap="previewImage" />
+              <view wx:if="{{item.role === 'agent'}}" class="save" data-url="{{img}}" catchtap="saveImage">保存</view>
+            </view>
+          </view>
+        </block>
+      </view>
+    </view>
+  </scroll-view>
+
+  <!-- 已选图片预览 -->
+  <view wx:if="{{imagePath}}" class="preview">
+    <image class="preview-img" src="{{imagePath}}" mode="aspectFill" />
+    <view class="clear" bindtap="clearImage">×</view>
+  </view>
+
+  <!-- 输入区 -->
+  <view class="input-area">
+    <view class="upload" bindtap="chooseImage">📎</view>
+    <input class="input" placeholder="发消息或描述想生成的图…" value="{{text}}"
+           bindinput="onText" bindconfirm="send" confirm-type="send" />
+    <view class="send-btn {{sending ? 'disabled' : ''}}" bindtap="send">{{sending ? '生成中…' : '发送'}}</view>
+  </view>
+</view>

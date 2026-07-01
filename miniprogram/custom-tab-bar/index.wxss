@@ -1,0 +1,20 @@
+/* 自定义 tabBar：字体加大、紫色主题 */
+.tab-bar {
+  display: flex;
+  background: #ffffff;
+  border-top: 1rpx solid #eee;
+  position: fixed;
+  bottom: 0; left: 0; right: 0;
+  z-index: 999;
+  padding-bottom: env(safe-area-inset-bottom);
+  box-shadow: 0 -2rpx 16rpx rgba(60,40,120,0.06);
+}
+.tab {
+  flex: 1;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  padding: 14rpx 0 18rpx;
+}
+.icon { font-size: 44rpx; line-height: 1; transition: transform .2s; }
+.text { font-size: 30rpx; color: #9aa0a6; margin-top: 8rpx; }   /* 比原生默认大 */
+.tab.active .text { color: #7c5cff; font-weight: 600; }
+.tab.active .icon { transform: scale(1.12); }

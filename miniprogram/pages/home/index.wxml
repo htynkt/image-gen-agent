@@ -1,0 +1,43 @@
+<view class="home">
+  <!-- ① 顶部：搜索框（紫色渐变）-->
+  <view class="header brand-grad">
+    <view class="search">
+      <input class="search-input" placeholder="搜索你喜欢的图…"
+             placeholder-style="color:rgba(255,255,255,.7)"
+             value="{{keyword}}" bindinput="onKeyword" bindconfirm="doSearch" confirm-type="search" />
+      <view class="search-btn" bindtap="doSearch">🔍</view>
+    </view>
+  </view>
+
+  <!-- ② 中间：分类导航（横向滚动）-->
+  <scroll-view class="cats" scroll-x>
+    <view wx:for="{{categories}}" wx:key="*this"
+          class="cat {{item === activeCat ? 'active' : ''}}"
+          data-cat="{{item}}" bindtap="switchCat">{{item}}</view>
+  </scroll-view>
+
+  <!-- ③ 下面：该分类的图片瀑布流（双列）-->
+  <view class="waterfall">
+    <view class="col">
+      <view wx:for="{{leftCol}}" wx:key="id" class="card" data-item="{{item}}" bindtap="tapImage">
+        <image class="img" src="{{item.url}}" mode="widthFix" />
+        <view class="fav {{item.liked ? 'liked' : ''}}" catchtap="toggleFav" data-id="{{item.id}}">
+          {{item.liked ? '❤' : '🤍'}}
+        </view>
+        <view class="title">{{item.title}}</view>
+      </view>
+    </view>
+    <view class="col">
+      <view wx:for="{{rightCol}}" wx:key="id" class="card" data-item="{{item}}" bindtap="tapImage">
+        <image class="img" src="{{item.url}}" mode="widthFix" />
+        <view class="fav {{item.liked ? 'liked' : ''}}" catchtap="toggleFav" data-id="{{item.id}}">
+          {{item.liked ? '❤' : '🤍'}}
+        </view>
+        <view class="title">{{item.title}}</view>
+      </view>
+    </view>
+  </view>
+
+  <view wx:if="{{loading}}" class="tip">加载中…</view>
+  <view wx:if="{{!leftCol.length && !rightCol.length && !loading}}" class="tip">这个分类还没有图哦～</view>
+</view>
